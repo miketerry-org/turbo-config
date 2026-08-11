@@ -1,0 +1,50 @@
+{
+  "name": "turbo-config",
+  "version": "0.2.0",
+  "description":"Fast and light weight conversion value manager",
+  "license": "MIT",
+  "author": "Mike Terry",
+  "type": "commonjs",
+  "main": "./index.js",
+  "scripts": {
+    "dev": "NODE_ENV=development nodemon index.js --watch .",
+    "test": "node --test",
+    "test:watch": "node --test --watch",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "test:only": "node --test --test-only"
+  },
+  "exports": {
+    ".": "./index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "config",
+    "configuration",
+    "cfg",
+    "settings",
+    "environment",
+    "dotenv",
+    "loader",
+    "parser",
+    "lightweight",
+    "fast"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/miketerry-org/turbo-cfg.git"
+  },
+  "bugs": {
+    "url": "https://github.com/miketerry-org/turbo-cfg/issues"
+  },
+  "homepage": "https://github.com/miketerry-org/turbo-cfg#readme",
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
