@@ -1,7 +1,7 @@
 {
   "name": "turbo-config",
   "version": "0.2.0",
-  "description":"Fast and light weight conversion value manager",
+  "description": "Fast and light weight conversion value manager",
   "license": "MIT",
   "author": "Mike Terry",
   "type": "commonjs",
@@ -11,7 +11,11 @@
     "test": "node --test",
     "test:watch": "node --test --watch",
     "test:coverage": "node --test --experimental-test-coverage",
-    "test:only": "node --test --test-only"
+    "test:only": "node --test --test-only",
+    "show:dev": "NODE_ENV=dev node index.js --show-config",
+    "show:prod": "NODE_ENV=prod node --env-file=.prod.env index.js --show-config",
+    "show:stage": "NODE_ENV=stage node --env-file=.stage.env index.js --show-config",
+    "show:test": "NODE_ENV=test node index.js --show-config"
   },
   "exports": {
     ".": "./index.js"

@@ -1,4 +1,4 @@
-// index.js:
+// index.js
 
 "use strict";
 
@@ -21,7 +21,7 @@ function loadConfigFile(filename) {
     return {};
   }
 
-  const contents = fs.readFileSync(fullPath);
+  const contents = fs.readFileSync(fullPath, "utf8");
 
   return dotenv.parse(contents);
 }
@@ -42,29 +42,77 @@ function sanitizeEnvironment(value) {
 //
 // Expand ${VARIABLE} references
 //
+// Environment variables take precedence over configuration values.
+//
+// Example:
+//
+//   process.env.DB_HOST = "https://postgres-hosting.com"
+//   configuration.DB_HOST = "${DB_HOST}"
+//
+// becomes:
+//
+//   configuration.DB_HOST = "https://postgres-hosting.com"
+//
+// Configuration values may also reference other configuration values.
+//
+// Circular references are detected and left unresolved rather than
+// causing infinite recursion.
+//
 function expandVariables(config) {
   const pattern = /\$\{([^}]+)\}/g;
+  const resolving = new Set();
 
-  for (const key of Object.keys(config)) {
-    let value = config[key];
-
-    if (typeof value !== "string") {
-      continue;
+  function resolveValue(key) {
+    if (resolving.has(key)) {
+      return config[key];
     }
 
-    value = value.replace(pattern, (match, variable) => {
-      if (config[variable] !== undefined) {
-        return config[variable];
-      }
+    const value = config[key];
 
+    if (typeof value !== "string") {
+      return value;
+    }
+
+    resolving.add(key);
+
+    const resolved = value.replace(pattern, (match, variable) => {
+      //
+      // Environment variables have priority.
+      //
       if (process.env[variable] !== undefined) {
         return process.env[variable];
       }
 
+      //
+      // Then check configuration values.
+      //
+      if (config[variable] !== undefined) {
+        if (variable === key || resolving.has(variable)) {
+          return match;
+        }
+
+        const resolvedVariable = resolveValue(variable);
+
+        if (resolvedVariable !== undefined) {
+          return String(resolvedVariable);
+        }
+      }
+
+      //
+      // Leave unresolved references unchanged.
+      //
       return match;
     });
 
-    config[key] = value;
+    resolving.delete(key);
+
+    config[key] = resolved;
+
+    return resolved;
+  }
+
+  for (const key of Object.keys(config)) {
+    resolveValue(key);
   }
 
   return config;
@@ -284,18 +332,22 @@ const environment = sanitizeEnvironment(
 // 3. Load runtime-specific configuration
 Object.assign(configuration, loadConfigFile(`./config/${environment}.config`));
 
-// Normalize final NODE_ENV
+// 4. Normalize final NODE_ENV
 configuration.NODE_ENV = environment;
 
-// 4. Expand variables
+// 5. Expand ${VARIABLE} references
 expandVariables(configuration);
 
-// if in development mode then log configuration object
-if (str("NODE_ENV").toLowerCase() === "dev") {
-  console.log("config", configuration);
+// 6. Display configuration when requested
+if (process.argv.includes("--show-config")) {
+  console.log("configuration");
+  console.log(configuration);
+  process.exit(0);
 }
 
+//
 // Public API
+//
 module.exports = {
   bool,
   int,
