@@ -1,0 +1,2072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>turbo-config Documentation</title>
+</head>
+
+<body>
+
+<main>
+
+  <header>
+    <h1>turbo-config</h1>
+
+    <p>
+      A lightweight Node.js configuration module for loading
+      environment-specific configuration files, resolving environment-variable
+      references, and providing typed configuration accessors.
+    </p>
+
+    <p>
+      <code>turbo-config</code> is designed to keep application configuration
+      outside application source code while providing a simple API for
+      retrieving configuration values as strings, integers, numbers, and
+      booleans.
+    </p>
+  </header>
+
+  <hr>
+
+  <section>
+    <h2>Features</h2>
+
+    <ul>
+      <li>Loads a common base configuration file.</li>
+      <li>Loads an environment-specific configuration file.</li>
+      <li>Uses <code>NODE_ENV</code> to select the runtime configuration.</li>
+      <li>Defaults to the <code>dev</code> environment when <code>NODE_ENV</code> is not specified.</li>
+      <li>Supports <code>${VARIABLE}</code> environment-variable substitution.</li>
+      <li>Gives <code>process.env</code> values precedence over configuration values during substitution.</li>
+      <li>Supports configuration values referencing other configuration values.</li>
+      <li>Detects circular configuration references.</li>
+      <li>Leaves unresolved <code>${VARIABLE}</code> references unchanged.</li>
+      <li>Provides typed accessors:
+        <ul>
+          <li><code>str()</code></li>
+          <li><code>int()</code></li>
+          <li><code>num()</code></li>
+          <li><code>bool()</code></li>
+        </ul>
+      </li>
+      <li>Supports optional configuration values.</li>
+      <li>Supports default values.</li>
+      <li>Supports numeric minimum and maximum validation.</li>
+      <li>Supports string trimming.</li>
+      <li>Supports string case conversion.</li>
+      <li>Supports string length validation.</li>
+      <li>Provides configuration inspection utilities:
+        <ul>
+          <li><code>has()</code></li>
+          <li><code>keys()</code></li>
+          <li><code>toObject()</code></li>
+        </ul>
+      </li>
+      <li>Provides a <code>--show-config</code> command-line option for displaying the resolved configuration.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Requirements</h2>
+
+    <ul>
+      <li>Node.js 20 or newer</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Installation</h2>
+
+    <p>Install the package with npm:</p>
+
+    <pre><code>npm install turbo-config</code></pre>
+
+    <p>
+      The package uses the <code>dotenv</code> package to parse configuration
+      files.
+    </p>
+  </section>
+
+  <section>
+    <h2>Configuration Directory</h2>
+
+    <p>
+      By default, <code>turbo-config</code> looks for configuration files in:
+    </p>
+
+    <pre><code>./config</code></pre>
+
+    <p>The expected directory structure is:</p>
+
+    <pre><code>config/
+├── base.config
+├── dev.config
+├── test.config
+└── prod.config</code></pre>
+
+    <p>
+      The <code>base.config</code> file is always loaded.
+    </p>
+
+    <p>
+      The environment-specific configuration file is selected using
+      <code>NODE_ENV</code>.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>NODE_ENV=dev</code></pre>
+
+    <p>causes:</p>
+
+    <pre><code>config/dev.config</code></pre>
+
+    <p>to be loaded.</p>
+
+    <p>Similarly:</p>
+
+    <pre><code>NODE_ENV=test</code></pre>
+
+    <p>loads:</p>
+
+    <pre><code>config/test.config</code></pre>
+
+    <p>and:</p>
+
+    <pre><code>NODE_ENV=prod</code></pre>
+
+    <p>loads:</p>
+
+    <pre><code>config/prod.config</code></pre>
+  </section>
+
+  <section>
+    <h2>Configuration Loading</h2>
+
+    <p>
+      Configuration is loaded in two stages.
+    </p>
+
+    <h3>1. Base Configuration</h3>
+
+    <p>
+      The module first loads:
+    </p>
+
+    <pre><code>./config/base.config</code></pre>
+
+    <p>
+      If this file does not exist, an empty configuration is used.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>PUBLIC_PATH=./public
+VIEWS_PATH=./views
+SERVER_HOST=${HOST}
+SERVER_PORT=${PORT}
+DB_DRIVER=sqlite</code></pre>
+
+    <h3>2. Environment Configuration</h3>
+
+    <p>
+      The module determines the runtime environment.
+    </p>
+
+    <p>The precedence is:</p>
+
+    <ol>
+      <li><code>NODE_ENV</code> defined in <code>base.config</code></li>
+      <li><code>process.env.NODE_ENV</code></li>
+      <li><code>dev</code></li>
+    </ol>
+
+    <p>Therefore:</p>
+
+    <pre><code>configuration.NODE_ENV
+        ↓
+process.env.NODE_ENV
+        ↓
+"dev"</code></pre>
+
+    <p>
+      The resulting value is sanitized before it is used as a filename.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>NODE_ENV=prod</code></pre>
+
+    <p>causes:</p>
+
+    <pre><code>./config/prod.config</code></pre>
+
+    <p>
+      to be loaded.
+    </p>
+
+    <p>
+      If the environment-specific configuration file does not exist, no error
+      is generated. The configuration loaded from <code>base.config</code>
+      remains in effect.
+    </p>
+  </section>
+
+  <section>
+    <h2>NODE_ENV Validation</h2>
+
+    <p>
+      Before <code>NODE_ENV</code> is used to construct a configuration
+      filename, it must contain only:
+    </p>
+
+    <ul>
+      <li>letters</li>
+      <li>numbers</li>
+      <li>underscores</li>
+      <li>hyphens</li>
+    </ul>
+
+    <p>Valid examples include:</p>
+
+    <pre><code>dev
+test
+prod
+production
+development
+qa
+staging
+prod-us</code></pre>
+
+    <p>
+      Invalid values include values containing characters such as:
+    </p>
+
+    <pre><code>/
+\
+.
+..
+$
+;</code></pre>
+
+    <p>For example:</p>
+
+    <pre><code>NODE_ENV=../../secret</code></pre>
+
+    <p>is rejected.</p>
+
+    <p>
+      This prevents <code>NODE_ENV</code> from being used to construct an
+      arbitrary filesystem path.
+    </p>
+
+    <p>An invalid value produces an error similar to:</p>
+
+    <pre><code>"../../secret" is not a valid NODE_ENV value.</code></pre>
+  </section>
+
+  <section>
+    <h2>Configuration Override Order</h2>
+
+    <p>
+      The environment-specific configuration is loaded after
+      <code>base.config</code>.
+    </p>
+
+    <p>
+      Therefore, values in the environment-specific configuration override
+      values with the same name in <code>base.config</code>.
+    </p>
+
+    <p>For example, <code>base.config</code>:</p>
+
+    <pre><code>SERVER_PORT=3000
+DB_NAME=application
+DB_DRIVER=sqlite</code></pre>
+
+    <p>and <code>prod.config</code>:</p>
+
+    <pre><code>SERVER_PORT=10000
+DB_NAME=prod
+DB_DRIVER=postgres</code></pre>
+
+    <p>produce:</p>
+
+    <pre><code>SERVER_PORT=10000
+DB_NAME=prod
+DB_DRIVER=postgres</code></pre>
+
+    <p>The effective loading order is:</p>
+
+    <pre><code>base.config
+    ↓
+environment-specific config
+    ↓
+variable expansion
+    ↓
+final configuration</code></pre>
+  </section>
+
+  <section>
+    <h2>Environment Variables</h2>
+
+    <p>
+      Configuration values can reference environment variables using:
+    </p>
+
+    <pre><code>${VARIABLE}</code></pre>
+
+    <p>For example:</p>
+
+    <pre><code>DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}</code></pre>
+
+    <p>
+      If the corresponding environment variables exist:
+    </p>
+
+    <pre><code>DB_HOST=https://postgres-hosting.com
+DB_PORT=5432
+DB_USERNAME=myuser
+DB_PASSWORD=mypassword</code></pre>
+
+    <p>
+      the resulting configuration becomes:
+    </p>
+
+    <pre><code>DB_HOST=https://postgres-hosting.com
+DB_PORT=5432
+DB_USERNAME=myuser
+DB_PASSWORD=mypassword</code></pre>
+  </section>
+
+  <section>
+    <h2>Environment Variable Precedence</h2>
+
+    <p>
+      When resolving:
+    </p>
+
+    <pre><code>${VARIABLE}</code></pre>
+
+    <p>
+      <code>process.env</code> takes precedence over configuration values.
+    </p>
+
+    <p>For example, suppose:</p>
+
+    <pre><code>process.env.DB_HOST=https://production.example.com</code></pre>
+
+    <p>and the configuration contains:</p>
+
+    <pre><code>DB_HOST=https://configuration.example.com</code></pre>
+
+    <p>A reference to:</p>
+
+    <pre><code>${DB_HOST}</code></pre>
+
+    <p>resolves to:</p>
+
+    <pre><code>https://production.example.com</code></pre>
+
+    <p>The resolution precedence is:</p>
+
+    <pre><code>process.env
+    ↓
+configuration
+    ↓
+unresolved reference</code></pre>
+
+    <p>
+      This makes it possible to keep deployment-specific values outside
+      configuration files.
+    </p>
+  </section>
+
+  <section>
+    <h2>Configuration-to-Configuration References</h2>
+
+    <p>
+      Configuration values may reference other configuration values.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>SERVER_HOST=localhost
+SERVER_PORT=3000
+SERVER_URL=http://${SERVER_HOST}:${SERVER_PORT}</code></pre>
+
+    <p>
+      The resulting value of <code>SERVER_URL</code> becomes:
+    </p>
+
+    <pre><code>http://localhost:3000</code></pre>
+
+    <p>
+      Configuration references may be chained.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>HOST=localhost
+PORT=3000
+BASE_URL=http://${HOST}:${PORT}
+API_URL=${BASE_URL}/api</code></pre>
+
+    <p>The resulting configuration becomes:</p>
+
+    <pre><code>HOST=localhost
+PORT=3000
+BASE_URL=http://localhost:3000
+API_URL=http://localhost:3000/api</code></pre>
+  </section>
+
+  <section>
+    <h2>Circular References</h2>
+
+    <p>
+      Circular references are detected.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>A=${B}
+B=${A}</code></pre>
+
+    <p>
+      does not cause infinite recursion.
+    </p>
+
+    <p>
+      The unresolved reference is left in place rather than causing the
+      application to hang.
+    </p>
+  </section>
+
+  <section>
+    <h2>Unresolved Variables</h2>
+
+    <p>
+      If a <code>${VARIABLE}</code> reference cannot be resolved from either
+      <code>process.env</code> or the configuration, the reference is left
+      unchanged.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>SERVER_HOST=${SERVER_HOST}</code></pre>
+
+    <p>
+      when <code>SERVER_HOST</code> does not exist in either source remains:
+    </p>
+
+    <pre><code>SERVER_HOST=${SERVER_HOST}</code></pre>
+
+    <p>
+      This is intentional.
+    </p>
+
+    <p>
+      <code>turbo-config</code> does not automatically throw an error merely
+      because a variable reference cannot be resolved.
+    </p>
+
+    <p>
+      If an application requires a value to exist, use one of the accessor
+      methods to enforce that requirement.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>const host = str("SERVER_HOST");</code></pre>
+
+    <p>
+      will throw an error if the value is missing.
+    </p>
+  </section>
+
+  <section>
+    <h2>Configuration Values Are Strings</h2>
+
+    <p>
+      Configuration files are parsed using <code>dotenv</code>.
+    </p>
+
+    <p>
+      As a result, values loaded from configuration files are normally
+      strings.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>PORT=3000
+DEBUG=true
+PRICE=12.50</code></pre>
+
+    <p>are initially represented as:</p>
+
+    <pre><code>PORT="3000"
+DEBUG="true"
+PRICE="12.50"</code></pre>
+
+    <p>
+      Use the appropriate accessor when a different JavaScript type is
+      required.
+    </p>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>API</h2>
+
+    <p>The public API consists of:</p>
+
+    <pre><code>const {
+  str,
+  int,
+  num,
+  bool,
+  has,
+  keys,
+  toObject
+} = require("turbo-config");</code></pre>
+
+    <h2>str()</h2>
+
+    <p>
+      Returns a configuration value as a string.
+    </p>
+
+    <h3>Syntax</h3>
+
+    <pre><code>str(name, defaultValue, options)</code></pre>
+
+    <h3>Parameters</h3>
+
+    <h4>name</h4>
+
+    <p>
+      The configuration variable name.
+    </p>
+
+    <pre><code>const host = str("SERVER_HOST");</code></pre>
+
+    <h4>defaultValue</h4>
+
+    <p>
+      An optional fallback value.
+    </p>
+
+    <pre><code>const host = str("SERVER_HOST", "localhost");</code></pre>
+
+    <p>
+      The default is used only when the configuration value is
+      <code>undefined</code>.
+    </p>
+
+    <h4>options</h4>
+
+    <p>
+      An optional options object.
+    </p>
+
+    <pre><code>const host = str("SERVER_HOST", undefined, {
+  trim: "both",
+  case: "none"
+});</code></pre>
+
+    <h3>str() Options</h3>
+
+    <h4>optional</h4>
+
+    <p>
+      Allows the configuration value to be missing.
+    </p>
+
+    <pre><code>const value = str("OPTIONAL_VALUE", undefined, {
+  optional: true
+});</code></pre>
+
+    <p>
+      If the value does not exist, <code>undefined</code> is returned.
+    </p>
+
+    <p>The default is:</p>
+
+    <pre><code>false</code></pre>
+
+    <h4>trim</h4>
+
+    <p>Controls whitespace removal.</p>
+
+    <p>Supported values:</p>
+
+    <pre><code>both
+left
+right
+none</code></pre>
+
+    <p>The default is:</p>
+
+    <pre><code>both</code></pre>
+
+    <p>Examples:</p>
+
+    <pre><code>str("NAME", undefined, {
+  trim: "both"
+});
+
+str("NAME", undefined, {
+  trim: "left"
+});
+
+str("NAME", undefined, {
+  trim: "right"
+});
+
+str("NAME", undefined, {
+  trim: "none"
+});</code></pre>
+
+    <h4>case</h4>
+
+    <p>
+      Controls case conversion.
+    </p>
+
+    <p>Supported values:</p>
+
+    <pre><code>none
+lower
+upper
+title</code></pre>
+
+    <p>The default is:</p>
+
+    <pre><code>none</code></pre>
+
+    <p>Examples:</p>
+
+    <pre><code>str("APP_NAME", undefined, {
+  case: "lower"
+});
+
+str("APP_NAME", undefined, {
+  case: "upper"
+});
+
+str("APP_NAME", undefined, {
+  case: "title"
+});</code></pre>
+
+    <h4>minLength</h4>
+
+    <p>
+      Requires the resulting string to contain at least the specified number
+      of characters.
+    </p>
+
+    <pre><code>const name = str("APP_NAME", undefined, {
+  minLength: 3
+});</code></pre>
+
+    <p>
+      If the resulting value is too short:
+    </p>
+
+    <pre><code>"APP_NAME" must be at least 3 characters.</code></pre>
+
+    <h4>maxLength</h4>
+
+    <p>
+      Requires the resulting string to contain no more than the specified
+      number of characters.
+    </p>
+
+    <pre><code>const name = str("APP_NAME", undefined, {
+  maxLength: 50
+});</code></pre>
+
+    <p>
+      If the value is too long:
+    </p>
+
+    <pre><code>"APP_NAME" cannot exceed 50 characters.</code></pre>
+
+    <h3>Complete str() Example</h3>
+
+    <pre><code>const appName = str("APP_NAME", "My Application", {
+  trim: "both",
+  case: "title",
+  minLength: 3,
+  maxLength: 50
+});</code></pre>
+  </section>
+
+  <section>
+    <h2>int()</h2>
+
+    <p>
+      Returns a configuration value as an integer.
+    </p>
+
+    <h3>Syntax</h3>
+
+    <pre><code>int(name, defaultValue, options)</code></pre>
+
+    <p>Example:</p>
+
+    <pre><code>const port = int("SERVER_PORT");</code></pre>
+
+    <p>If:</p>
+
+    <pre><code>SERVER_PORT=3000</code></pre>
+
+    <p>then:</p>
+
+    <pre><code>port === 3000</code></pre>
+
+    <p>and:</p>
+
+    <pre><code>typeof port === "number"</code></pre>
+
+    <h3>int() Options</h3>
+
+    <h4>optional</h4>
+
+    <p>
+      Allows the configuration value to be missing.
+    </p>
+
+    <pre><code>const value = int("OPTIONAL_VALUE", undefined, {
+  optional: true
+});</code></pre>
+
+    <h4>minValue</h4>
+
+    <p>
+      Requires the integer to be greater than or equal to the specified value.
+    </p>
+
+    <pre><code>const port = int("SERVER_PORT", undefined, {
+  minValue: 1
+});</code></pre>
+
+    <h4>maxValue</h4>
+
+    <p>
+      Requires the integer to be less than or equal to the specified value.
+    </p>
+
+    <pre><code>const port = int("SERVER_PORT", undefined, {
+  maxValue: 65535
+});</code></pre>
+
+    <p>A common use is:</p>
+
+    <pre><code>const port = int("SERVER_PORT", undefined, {
+  minValue: 1,
+  maxValue: 65535
+});</code></pre>
+
+    <h3>Invalid Integer</h3>
+
+    <p>If the value cannot be converted to an integer:</p>
+
+    <pre><code>int("SERVER_PORT");</code></pre>
+
+    <p>throws:</p>
+
+    <pre><code>"SERVER_PORT" must be a valid integer.</code></pre>
+  </section>
+
+  <section>
+    <h2>num()</h2>
+
+    <p>
+      Returns a configuration value as a JavaScript number.
+    </p>
+
+    <h3>Syntax</h3>
+
+    <pre><code>num(name, defaultValue, options)</code></pre>
+
+    <p>Example:</p>
+
+    <pre><code>const timeout = num("REQUEST_TIMEOUT");</code></pre>
+
+    <p>If:</p>
+
+    <pre><code>REQUEST_TIMEOUT=12.5</code></pre>
+
+    <p>then:</p>
+
+    <pre><code>timeout === 12.5</code></pre>
+
+    <h3>num() Options</h3>
+
+    <h4>optional</h4>
+
+    <p>
+      Allows the configuration value to be missing.
+    </p>
+
+    <h4>minValue</h4>
+
+    <p>
+      Requires the number to be greater than or equal to the specified value.
+    </p>
+
+    <pre><code>const price = num("PRICE", undefined, {
+  minValue: 0
+});</code></pre>
+
+    <h4>maxValue</h4>
+
+    <p>
+      Requires the number to be less than or equal to the specified value.
+    </p>
+
+    <pre><code>const price = num("PRICE", undefined, {
+  maxValue: 1000
+});</code></pre>
+
+    <h3>Invalid Number</h3>
+
+    <p>If the value cannot be converted to a number:</p>
+
+    <pre><code>num("PRICE");</code></pre>
+
+    <p>throws:</p>
+
+    <pre><code>"PRICE" must be a valid number.</code></pre>
+  </section>
+
+  <section>
+    <h2>bool()</h2>
+
+    <p>
+      Returns a configuration value as a JavaScript boolean.
+    </p>
+
+    <h3>Syntax</h3>
+
+    <pre><code>bool(name, defaultValue, options)</code></pre>
+
+    <p>Example:</p>
+
+    <pre><code>const debug = bool("DEBUG");</code></pre>
+
+    <h3>Accepted True Values</h3>
+
+    <p>
+      The following values are interpreted as <code>true</code>:
+    </p>
+
+    <pre><code>true
+1
+yes
+on</code></pre>
+
+    <p>
+      Case is ignored.
+    </p>
+
+    <p>Therefore these are all valid:</p>
+
+    <pre><code>true
+TRUE
+True
+yes
+YES
+on
+ON
+1</code></pre>
+
+    <h3>Accepted False Values</h3>
+
+    <p>
+      The following values are interpreted as <code>false</code>:
+    </p>
+
+    <pre><code>false
+0
+no
+off</code></pre>
+
+    <p>
+      Case is ignored.
+    </p>
+
+    <h3>bool() Options</h3>
+
+    <h4>optional</h4>
+
+    <p>
+      Allows the configuration value to be missing.
+    </p>
+
+    <pre><code>const value = bool("OPTIONAL_VALUE", undefined, {
+  optional: true
+});</code></pre>
+
+    <h3>Invalid Boolean</h3>
+
+    <p>For example:</p>
+
+    <pre><code>DEBUG=maybe</code></pre>
+
+    <p>causes:</p>
+
+    <pre><code>bool("DEBUG");</code></pre>
+
+    <p>to throw:</p>
+
+    <pre><code>"DEBUG" must be a valid boolean.</code></pre>
+  </section>
+
+  <section>
+    <h2>Default Values</h2>
+
+    <p>
+      All typed accessors support a default value.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>const host = str("SERVER_HOST", "localhost");</code></pre>
+
+    <p>
+      If <code>SERVER_HOST</code> is not configured, the result is:
+    </p>
+
+    <pre><code>localhost</code></pre>
+
+    <p>Similarly:</p>
+
+    <pre><code>const port = int("SERVER_PORT", 3000);
+
+const debug = bool("DEBUG", false);</code></pre>
+
+    <h3>Important Behavior</h3>
+
+    <p>
+      A default value is used only when the configuration property is
+      <code>undefined</code>.
+    </p>
+
+    <p>
+      A default value does not replace an invalid configured value.
+    </p>
+
+    <p>For example, if:</p>
+
+    <pre><code>SERVER_PORT=abc</code></pre>
+
+    <p>then:</p>
+
+    <pre><code>int("SERVER_PORT", 3000);</code></pre>
+
+    <p>
+      throws an error rather than returning <code>3000</code>.
+    </p>
+
+    <p>
+      This ensures that invalid configuration is not silently hidden by a
+      default.
+    </p>
+  </section>
+
+  <section>
+    <h2>Optional Values</h2>
+
+    <p>
+      Accessors can be configured to allow missing values.
+    </p>
+
+    <p>Example:</p>
+
+    <pre><code>const value = str("OPTIONAL_VALUE", undefined, {
+  optional: true
+});</code></pre>
+
+    <p>
+      If the value does not exist, the result is:
+    </p>
+
+    <pre><code>undefined</code></pre>
+
+    <p>
+      Without <code>optional: true</code>, a missing value causes an error.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>str("REQUIRED_VALUE");</code></pre>
+
+    <p>throws:</p>
+
+    <pre><code>"REQUIRED_VALUE" is required.</code></pre>
+  </section>
+
+  <section>
+    <h2>Required Values</h2>
+
+    <p>
+      By default, configuration values are required.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>const databaseHost = str("DB_HOST");</code></pre>
+
+    <p>
+      If <code>DB_HOST</code> does not exist, an error is thrown.
+    </p>
+
+    <p>
+      This provides a simple way to enforce required application
+      configuration.
+    </p>
+  </section>
+
+  <section>
+    <h2>has()</h2>
+
+    <p>
+      Determines whether a configuration property exists.
+    </p>
+
+    <h3>Syntax</h3>
+
+    <pre><code>has(name)</code></pre>
+
+    <p>Example:</p>
+
+    <pre><code>if (has("DB_HOST")) {
+  console.log("Database host is configured.");
+}</code></pre>
+
+    <p>
+      Returns <code>true</code> or <code>false</code>.
+    </p>
+
+    <p>
+      A property is considered present when its configuration value is not
+      <code>undefined</code>.
+    </p>
+  </section>
+
+  <section>
+    <h2>keys()</h2>
+
+    <p>
+      Returns an array containing the names of all configuration properties.
+    </p>
+
+    <h3>Syntax</h3>
+
+    <pre><code>keys()</code></pre>
+
+    <p>Example:</p>
+
+    <pre><code>console.log(keys());</code></pre>
+
+    <p>Possible result:</p>
+
+    <pre><code>[
+  "PUBLIC_PATH",
+  "VIEWS_PATH",
+  "SERVER_HOST",
+  "SERVER_PORT",
+  "DB_DRIVER",
+  "DB_HOST",
+  "DB_PORT",
+  "DB_NAME",
+  "DB_USERNAME",
+  "DB_PASSWORD",
+  "NODE_ENV"
+]</code></pre>
+  </section>
+
+  <section>
+    <h2>toObject()</h2>
+
+    <p>
+      Returns a snapshot of the current configuration as a frozen object.
+    </p>
+
+    <h3>Syntax</h3>
+
+    <pre><code>toObject()</code></pre>
+
+    <p>Example:</p>
+
+    <pre><code>const config = toObject();
+
+console.log(config.SERVER_HOST);
+console.log(config.SERVER_PORT);</code></pre>
+
+    <p>
+      The returned object is frozen:
+    </p>
+
+    <pre><code>Object.isFrozen(config) === true</code></pre>
+
+    <p>
+      The returned object is a shallow copy of the module's internal
+      configuration state.
+    </p>
+
+    <p>
+      Changes made to the returned object do not modify the module's internal
+      configuration.
+    </p>
+  </section>
+
+  <section>
+    <h2>Complete Application Example</h2>
+
+    <pre><code>"use strict";
+
+const {
+  str,
+  int,
+  bool,
+  num
+} = require("turbo-config");
+
+const serverHost = str("SERVER_HOST", "127.0.0.1");
+
+const serverPort = int("SERVER_PORT", 3000, {
+  minValue: 1,
+  maxValue: 65535
+});
+
+const debug = bool("DEBUG", false);
+
+const requestTimeout = num("REQUEST_TIMEOUT", 30, {
+  minValue: 0
+});
+
+console.log({
+  serverHost,
+  serverPort,
+  debug,
+  requestTimeout
+});</code></pre>
+  </section>
+
+  <section>
+    <h2>Example Configuration</h2>
+
+    <h3>config/base.config</h3>
+
+    <pre><code>PUBLIC_PATH=./public
+VIEWS_PATH=./views
+
+SERVER_HOST=${HOST}
+SERVER_PORT=${PORT}
+
+DB_DRIVER=sqlite
+DB_NAME=development</code></pre>
+
+    <h3>config/prod.config</h3>
+
+    <pre><code>DB_DRIVER=postgres
+DB_NAME=prod
+DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}</code></pre>
+  </section>
+
+  <section>
+    <h2>Production Environment</h2>
+
+    <p>
+      For production deployment, sensitive values should be supplied through
+      the hosting platform's environment-variable system rather than
+      committed to source control.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>DB_HOST=https://postgres-hosting.com
+DB_PORT=5432
+DB_USERNAME=production_user
+DB_PASSWORD=production_password</code></pre>
+
+    <p>
+      The configuration file can contain references:
+    </p>
+
+    <pre><code>DB_HOST=${DB_HOST}
+DB_PORT=${DB_PORT}
+DB_USERNAME=${DB_USERNAME}
+DB_PASSWORD=${DB_PASSWORD}</code></pre>
+
+    <p>
+      This allows the same configuration files to be used across different
+      environments without embedding credentials in source code.
+    </p>
+  </section>
+
+  <section>
+    <h2>Render Deployment</h2>
+
+    <p>
+      <code>turbo-config</code> can be used with Render and similar hosting
+      platforms.
+    </p>
+
+    <p>
+      A Render web service supplies a <code>PORT</code> environment variable
+      to the application.
+    </p>
+
+    <p>
+      The application should listen on the port supplied by the hosting
+      platform.
+    </p>
+
+    <p>A production configuration can therefore contain:</p>
+
+    <pre><code>SERVER_HOST=${HOST}
+SERVER_PORT=${PORT}</code></pre>
+
+    <p>The deployment environment can supply:</p>
+
+    <pre><code>HOST=0.0.0.0
+PORT=10000</code></pre>
+
+    <p>The resulting configuration becomes:</p>
+
+    <pre><code>SERVER_HOST=0.0.0.0
+SERVER_PORT=10000</code></pre>
+
+    <p>
+      <code>SERVER_HOST</code> and <code>SERVER_PORT</code> are normally
+      operational configuration values and are not considered secrets.
+    </p>
+
+    <p>
+      Values such as database passwords, API keys, encryption keys,
+      authentication tokens, and private keys should be treated as secrets.
+    </p>
+  </section>
+
+  <section>
+    <h2>Command-Line Configuration Display</h2>
+
+    <p>
+      <code>turbo-config</code> supports the
+      <code>--show-config</code> command-line option.
+    </p>
+
+    <p>Run:</p>
+
+    <pre><code>node index.js --show-config</code></pre>
+
+    <p>
+      The module checks <code>process.argv</code> for:
+    </p>
+
+    <pre><code>--show-config</code></pre>
+
+    <p>
+      When the option is present, the resolved configuration is displayed and
+      the process terminates.
+    </p>
+
+    <p>Example:</p>
+
+    <pre><code>configuration
+{
+  PUBLIC_PATH: './public',
+  VIEWS_PATH: './views',
+  SERVER_HOST: '0.0.0.0',
+  SERVER_PORT: '10000',
+  DB_DRIVER: 'postgres',
+  DB_HOST: 'https://postgres-hosting.com',
+  DB_PORT: '5432',
+  DB_NAME: 'prod',
+  DB_USERNAME: 'production_user',
+  DB_PASSWORD: 'production_password',
+  NODE_ENV: 'prod'
+}</code></pre>
+
+    <h3>Security Warning</h3>
+
+    <p>
+      The <code>--show-config</code> option should normally be used only for
+      local development and configuration troubleshooting.
+    </p>
+
+    <p>
+      The displayed configuration can contain sensitive values.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>DB_PASSWORD
+API_KEY
+SECRET_KEY
+TOKEN
+ENCRYPTION_KEY</code></pre>
+
+    <p>
+      Do not expose the output of <code>--show-config</code> through an HTTP
+      endpoint, public log, or other publicly accessible mechanism.
+    </p>
+  </section>
+
+  <section>
+    <h2>npm Script Examples</h2>
+
+    <p>
+      A package can define environment-specific scripts in
+      <code>package.json</code>.
+    </p>
+
+    <pre><code>{
+  "scripts": {
+    "show:dev": "NODE_ENV=dev node --env-file=.dev.env index.js --show-config",
+    "show:test": "NODE_ENV=test node --env-file=.test.env index.js --show-config",
+    "show:prod": "NODE_ENV=prod node --env-file=.prod.env index.js --show-config"
+  }
+}</code></pre>
+
+    <p>The scripts can then be run with:</p>
+
+    <pre><code>npm run show:dev
+
+npm run show:test
+
+npm run show:prod</code></pre>
+  </section>
+
+  <section>
+    <h2>Configuration File Format</h2>
+
+    <p>
+      Configuration files use the format supported by
+      <code>dotenv</code>.
+    </p>
+
+    <p>The basic format is:</p>
+
+    <pre><code>NAME=value</code></pre>
+
+    <p>For example:</p>
+
+    <pre><code>APP_NAME=My Application
+SERVER_PORT=3000
+DEBUG=true</code></pre>
+
+    <p>
+      Quoted values are also supported by the underlying
+      <code>dotenv</code> parser.
+    </p>
+  </section>
+
+  <section>
+    <h2>Missing Configuration Files</h2>
+
+    <p>
+      <code>turbo-config</code> does not throw an error when a configuration
+      file does not exist.
+    </p>
+
+    <p>For example, if:</p>
+
+    <pre><code>config/test.config</code></pre>
+
+    <p>
+      does not exist, the module continues using the configuration already
+      loaded from:
+    </p>
+
+    <pre><code>config/base.config</code></pre>
+
+    <p>
+      This makes environment-specific configuration files optional.
+    </p>
+
+    <p>
+      Applications that require particular values should enforce those
+      requirements through the typed accessors.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>const port = int("SERVER_PORT");</code></pre>
+
+    <p>
+      will throw an error if <code>SERVER_PORT</code> is absent.
+    </p>
+  </section>
+
+  <section>
+    <h2>Error Handling</h2>
+
+    <p>
+      The module can generate several types of configuration errors.
+    </p>
+
+    <h3>Missing Required Value</h3>
+
+    <pre><code>"DB_HOST" is required.</code></pre>
+
+    <p>
+      This is generated when a required configuration value does not exist.
+    </p>
+
+    <h3>Invalid Boolean</h3>
+
+    <pre><code>"DEBUG" must be a valid boolean.</code></pre>
+
+    <p>
+      This is generated when a boolean value is not one of the supported
+      representations.
+    </p>
+
+    <h3>Invalid Integer</h3>
+
+    <pre><code>"PORT" must be a valid integer.</code></pre>
+
+    <p>
+      This is generated when an integer value cannot be converted to a valid
+      number.
+    </p>
+
+    <h3>Invalid Number</h3>
+
+    <pre><code>"TIMEOUT" must be a valid number.</code></pre>
+
+    <p>
+      This is generated when a numeric value cannot be converted to a valid
+      number.
+    </p>
+
+    <h3>Integer/Number Range Errors</h3>
+
+    <p>For a minimum violation:</p>
+
+    <pre><code>"PORT" cannot be less than 1.</code></pre>
+
+    <p>For a maximum violation:</p>
+
+    <pre><code>"PORT" cannot be greater than 65535.</code></pre>
+
+    <h3>String Length Errors</h3>
+
+    <p>For a minimum length violation:</p>
+
+    <pre><code>"APP_NAME" must be at least 3 characters.</code></pre>
+
+    <p>For a maximum length violation:</p>
+
+    <pre><code>"APP_NAME" cannot exceed 50 characters.</code></pre>
+
+    <h3>Invalid NODE_ENV</h3>
+
+    <p>
+      An invalid environment name produces an error such as:
+    </p>
+
+    <pre><code>"some/value" is not a valid NODE_ENV value.</code></pre>
+  </section>
+
+  <section>
+    <h2>API Summary</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Function</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td><code>str()</code></td>
+          <td>Return a configuration value as a string</td>
+        </tr>
+
+        <tr>
+          <td><code>int()</code></td>
+          <td>Return a configuration value as an integer</td>
+        </tr>
+
+        <tr>
+          <td><code>num()</code></td>
+          <td>Return a configuration value as a number</td>
+        </tr>
+
+        <tr>
+          <td><code>bool()</code></td>
+          <td>Return a configuration value as a boolean</td>
+        </tr>
+
+        <tr>
+          <td><code>has()</code></td>
+          <td>Determine whether a configuration value exists</td>
+        </tr>
+
+        <tr>
+          <td><code>keys()</code></td>
+          <td>Return all configuration property names</td>
+        </tr>
+
+        <tr>
+          <td><code>toObject()</code></td>
+          <td>Return a frozen configuration snapshot</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Accessor Options Summary</h2>
+
+    <h3>str()</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Values</th>
+          <th>Default</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td><code>optional</code></td>
+          <td><code>true</code> / <code>false</code></td>
+          <td><code>false</code></td>
+        </tr>
+
+        <tr>
+          <td><code>trim</code></td>
+          <td><code>both</code>, <code>left</code>, <code>right</code>, <code>none</code></td>
+          <td><code>both</code></td>
+        </tr>
+
+        <tr>
+          <td><code>case</code></td>
+          <td><code>none</code>, <code>lower</code>, <code>upper</code>, <code>title</code></td>
+          <td><code>none</code></td>
+        </tr>
+
+        <tr>
+          <td><code>minLength</code></td>
+          <td>number</td>
+          <td>none</td>
+        </tr>
+
+        <tr>
+          <td><code>maxLength</code></td>
+          <td>number</td>
+          <td>none</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>int()</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td><code>optional</code></td>
+          <td>Allow missing value</td>
+        </tr>
+
+        <tr>
+          <td><code>minValue</code></td>
+          <td>Minimum permitted integer</td>
+        </tr>
+
+        <tr>
+          <td><code>maxValue</code></td>
+          <td>Maximum permitted integer</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>num()</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td><code>optional</code></td>
+          <td>Allow missing value</td>
+        </tr>
+
+        <tr>
+          <td><code>minValue</code></td>
+          <td>Minimum permitted number</td>
+        </tr>
+
+        <tr>
+          <td><code>maxValue</code></td>
+          <td>Maximum permitted number</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>bool()</h3>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Option</th>
+          <th>Purpose</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td><code>optional</code></td>
+          <td>Allow missing value</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Configuration Resolution Lifecycle</h2>
+
+    <p>The complete initialization process is:</p>
+
+    <pre><code>1. Create empty configuration object
+                 |
+                 v
+2. Load ./config/base.config
+                 |
+                 v
+3. Determine NODE_ENV
+                 |
+                 v
+4. Validate NODE_ENV
+                 |
+                 v
+5. Load ./config/&lt;NODE_ENV&gt;.config
+                 |
+                 v
+6. Set configuration.NODE_ENV
+                 |
+                 v
+7. Expand ${VARIABLE} references
+                 |
+                 v
+8. Check for --show-config
+                 |
+                 v
+9. Export public API</code></pre>
+
+    <p>
+      Variable resolution follows:
+    </p>
+
+    <pre><code>${VARIABLE}
+     |
+     +---- process.env.VARIABLE exists?
+     |             |
+     |            yes
+     |             |
+     |             v
+     |       use process.env value
+     |
+     +---- otherwise configuration.VARIABLE exists?
+     |             |
+     |            yes
+     |             |
+     |             v
+     |       resolve configuration value
+     |
+     +---- otherwise
+                   |
+                   v
+          leave ${VARIABLE}
+          unchanged</code></pre>
+  </section>
+
+  <section>
+    <h2>Design Philosophy</h2>
+
+    <p>
+      <code>turbo-config</code> intentionally keeps configuration management
+      simple.
+    </p>
+
+    <p>
+      The module is not intended to be a complete configuration framework.
+    </p>
+
+    <p>
+      It provides a small layer between configuration files, environment
+      variables, and application code.
+    </p>
+
+    <p>
+      Instead of repeatedly writing code such as:
+    </p>
+
+    <pre><code>const port = Number.parseInt(
+  process.env.SERVER_PORT || "3000",
+  10
+);</code></pre>
+
+    <p>
+      an application can use:
+    </p>
+
+    <pre><code>const port = int("SERVER_PORT", 3000);</code></pre>
+
+    <p>
+      This keeps configuration parsing, conversion, and validation in one
+      place.
+    </p>
+  </section>
+
+  <section>
+    <h2>Security Considerations</h2>
+
+    <p>
+      Configuration files may contain sensitive information.
+    </p>
+
+    <p>
+      Never commit production credentials to source control.
+    </p>
+
+    <p>Avoid committing values such as:</p>
+
+    <pre><code>DB_PASSWORD
+API_KEY
+JWT_SECRET
+ENCRYPTION_KEY
+ACCESS_TOKEN
+PRIVATE_KEY</code></pre>
+
+    <p>
+      Use environment variables or your deployment platform's secret
+      management facilities instead.
+    </p>
+
+    <p>
+      Also avoid logging the complete <code>process.env</code> object.
+    </p>
+
+    <p>
+      The environment can contain:
+    </p>
+
+    <ul>
+      <li>database passwords</li>
+      <li>API keys</li>
+      <li>cloud-provider credentials</li>
+      <li>encryption keys</li>
+      <li>session secrets</li>
+      <li>deployment tokens</li>
+      <li>authentication credentials</li>
+    </ul>
+
+    <p>
+      For the same reason, use <code>--show-config</code> carefully because
+      the resolved configuration can also contain secrets.
+    </p>
+  </section>
+
+  <section>
+    <h2>Best Practices</h2>
+
+    <h3>Keep Configuration Out of Application Source Code</h3>
+
+    <p>Prefer:</p>
+
+    <pre><code>const port = int("SERVER_PORT");</code></pre>
+
+    <p>
+      over hard-coding deployment-specific values.
+    </p>
+
+    <h3>Keep Secrets Out of Configuration Files</h3>
+
+    <p>Prefer:</p>
+
+    <pre><code>DB_PASSWORD=${DB_PASSWORD}</code></pre>
+
+    <p>
+      with the actual value supplied by the deployment environment.
+    </p>
+
+    <p>Avoid:</p>
+
+    <pre><code>DB_PASSWORD=my-production-password</code></pre>
+
+    <p>
+      in a file committed to source control.
+    </p>
+
+    <h3>Validate Important Values</h3>
+
+    <pre><code>const port = int("SERVER_PORT", undefined, {
+  minValue: 1,
+  maxValue: 65535
+});</code></pre>
+
+    <h3>Use Appropriate Accessors</h3>
+
+    <p>Use:</p>
+
+    <ul>
+      <li><code>str()</code> for strings.</li>
+      <li><code>int()</code> for integers.</li>
+      <li><code>num()</code> for general numbers.</li>
+      <li><code>bool()</code> for boolean values.</li>
+    </ul>
+
+    <h3>Use Defaults Only Where Appropriate</h3>
+
+    <p>
+      Defaults are useful for values that have a sensible fallback:
+    </p>
+
+    <pre><code>const host = str("SERVER_HOST", "127.0.0.1");
+
+const debug = bool("DEBUG", false);</code></pre>
+
+    <p>
+      Defaults should not be used to hide invalid configuration.
+    </p>
+  </section>
+
+  <section>
+    <h2>Example Project Structure</h2>
+
+    <p>
+      A typical application using <code>turbo-config</code> might have:
+    </p>
+
+    <pre><code>my-app/
+├── config/
+│   ├── base.config
+│   ├── dev.config
+│   ├── test.config
+│   └── prod.config
+├── src/
+│   ├── server.js
+│   └── ...
+├── .dev.env
+├── .test.env
+├── .prod.env
+├── package.json
+└── node_modules/</code></pre>
+
+    <p>
+      Environment files containing secrets should not be committed to source
+      control.
+    </p>
+  </section>
+
+  <section>
+    <h2>Example Server Configuration</h2>
+
+    <p>
+      A Node.js server might use:
+    </p>
+
+    <pre><code>const {
+  str,
+  int
+} = require("turbo-config");
+
+const host = str("SERVER_HOST", "127.0.0.1");
+
+const port = int("SERVER_PORT", 3000, {
+  minValue: 1,
+  maxValue: 65535
+});
+
+server.listen(port, host, () => {
+  console.log(`Server listening on ${host}:${port}`);
+});</code></pre>
+
+    <p>
+      For a Render deployment, the resolved values might be:
+    </p>
+
+    <pre><code>SERVER_HOST=0.0.0.0
+SERVER_PORT=10000</code></pre>
+
+    <p>
+      The public URL presented to users is controlled by the hosting platform
+      rather than by the application's internal listening address.
+    </p>
+  </section>
+
+  <section>
+    <h2>Module Initialization</h2>
+
+    <p>
+      The configuration module initializes when it is first required.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>const config = require("turbo-config");</code></pre>
+
+    <p>
+      At initialization time, the module:
+    </p>
+
+    <ol>
+      <li>Loads <code>base.config</code>.</li>
+      <li>Determines <code>NODE_ENV</code>.</li>
+      <li>Validates <code>NODE_ENV</code>.</li>
+      <li>Loads the environment-specific configuration.</li>
+      <li>Normalizes <code>configuration.NODE_ENV</code>.</li>
+      <li>Resolves <code>${VARIABLE}</code> references.</li>
+      <li>Checks for <code>--show-config</code>.</li>
+      <li>Exposes the public API.</li>
+    </ol>
+
+    <p>
+      Because initialization occurs when the module is loaded, environment
+      variables required by the configuration should be established before
+      the application requires <code>turbo-config</code>.
+    </p>
+  </section>
+
+  <section>
+    <h2>Public API</h2>
+
+    <p>
+      The module exports only the following functions:
+    </p>
+
+    <pre><code>module.exports = {
+  bool,
+  int,
+  num,
+  str,
+  has,
+  keys,
+  toObject
+};</code></pre>
+
+    <p>
+      The internal configuration object and configuration-loading functions
+      are not exported.
+    </p>
+  </section>
+
+  <section>
+    <h2>Version</h2>
+
+    <p>
+      The package version is maintained in <code>package.json</code>.
+    </p>
+
+    <p>Example:</p>
+
+    <pre><code>{
+  "name": "turbo-config",
+  "version": "0.2.0"
+}</code></pre>
+  </section>
+
+  <section>
+    <h2>License</h2>
+
+    <p>
+      Add the package license here.
+    </p>
+
+    <p>For example:</p>
+
+    <pre><code>MIT</code></pre>
+
+    <p>
+      if the package is distributed under the MIT License.
+    </p>
+  </section>
+
+  <section>
+    <h2>Author</h2>
+
+    <p>
+      Add the package author or organization here.
+    </p>
+  </section>
+
+  <section>
+    <h2>Summary</h2>
+
+    <p>
+      <code>turbo-config</code> provides a simple configuration pipeline:
+    </p>
+
+    <pre><code>Configuration Files
+        +
+Environment Variables
+        |
+        v
+Variable Expansion
+        |
+        v
+Resolved Configuration
+        |
+        v
+Typed Accessors
+        |
+        v
+    Application</code></pre>
+
+    <p>
+      The primary API is intentionally small:
+    </p>
+
+    <pre><code>const {
+  str,
+  int,
+  num,
+  bool,
+  has,
+  keys,
+  toObject
+} = require("turbo-config");</code></pre>
+
+    <p>
+      This provides the application with a centralized mechanism for loading,
+      resolving, validating, converting, and accessing runtime configuration
+      without coupling application code directly to <code>process.env</code>.
+    </p>
+  </section>
+
+</main>
+
+</body>
+</html>
